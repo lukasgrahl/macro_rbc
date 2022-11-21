@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# exclude folders
+data/
+env_macro_rbc/
+notebooks/.ipynb_checkpoints
+.idea/
