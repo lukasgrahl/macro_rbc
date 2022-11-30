@@ -84,7 +84,7 @@ def get_seasonal_hp(arr: pd.Series, plot: bool=False, lamb:float = 6.25, **kwarg
 @skipna
 def arr_adf(arr, maxlag: int=10, p_level: float=.05):
     """
-    The null hypothesis of the Augmented Dickey-Fuller is that there is a unit root - non-stationarity
+    The null hypothesis of the Augmented Dickey-Fuller states there is a unit root, hence data is non-stationary.
     """
     test = adfuller(arr, maxlag=maxlag)
     print(arr.name, f" p-val: {test[1]},  reject: {test[1] <= p_level}")
