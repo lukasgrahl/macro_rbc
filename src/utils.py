@@ -36,16 +36,15 @@ def plot_df(df: pd.DataFrame,
 def skipna(func): 
 
     @wraps(func)
-    def wrapper(*args, skipna: bool=False, **kwargs):
-        assert "arr" not in kwargs.keys(), "Do not specify 'arr' as kwarg, only as arg"
+    def wrapper(arr, *args, skipna: bool=False, **kwargs):
+        arr_ = arr.copy()
         if skipna:
-            arr = args[0].copy()
-            arr_ = arr[~arr.isna()].copy()
-            arr_ = func(arr_, **kwargs)
-            arr[~arr.isna()] = arr_
-            return arr
+            arr_na = arr_[~arr_.isna()].copy()
+            arr_na = func(arr_na, **kwargs)
+            arr_[~arr_.isna()] = arr_na
+            return arr_
         else:
-            return func(*args, **kwargs)
+            return func(arr_, *args, **kwargs)
     return wrapper
 
 
@@ -62,6 +61,7 @@ def apply_func(arr, func, **kwargs):
     """
     return func(arr)
 
+
 @skipna
 def get_seasonal_decompose(arr: pd.Series, plot: bool=False, **kwargs):
     """
@@ -70,6 +70,7 @@ def get_seasonal_decompose(arr: pd.Series, plot: bool=False, **kwargs):
     res = sm.tsa.seasonal_decompose(arr, **kwargs)
     res.plot() if plot is True else 0
     return res.trend
+
 
 @skipna
 def get_seasonal_hp(arr: pd.Series, plot: bool=False, lamb:float = 6.25, **kwargs):
