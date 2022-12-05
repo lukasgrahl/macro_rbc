@@ -69,17 +69,20 @@ def get_seasonal_decompose(arr: pd.Series, plot: bool=False, **kwargs):
     """
     res = sm.tsa.seasonal_decompose(arr, **kwargs)
     res.plot() if plot is True else 0
-    return res.trend
+    return res.trend, res.seasonal
 
 
 @skipna
-def get_seasonal_hp(arr: pd.Series, plot: bool=False, lamb:float = 6.25, **kwargs):
+def get_seasonal_hp(arr: pd.Series, plot: bool=False, lamb:float = 6.25, return_cycle: bool = False, **kwargs):
     """
     returns: cycle, trend
     """
     cycle, trend = hpfilter(arr, lamb=lamb)
     plt.plot(np.array([cycle, trend]).transpose()) if plot is True else 0
-    return trend
+    if return_cycle:
+        return cycle
+    else:
+        return trend
 
 
 @skipna
@@ -93,10 +96,13 @@ def arr_adf(arr, maxlag: int=10, p_level: float=.05):
     
 
 @skipna
-def poly_detrend(arr, poly_order: int=2):
+def poly_detrend(arr, poly_order: int=2, return_pred: bool = False, **kwargs):
     x = range(0, len(arr))
     y = arr.values
-    model = np.polyfit(x, y, poly_order)
+    model = np.polyfit(x, y, poly_order, **kwargs)
     predicted = np.polyval(model, x)
     detrend = y - predicted
-    return detrend
+    if return_pred:
+        return predicted
+    else:
+        return detrend
