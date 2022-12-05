@@ -32,6 +32,39 @@ def plot_df(df: pd.DataFrame,
     fig.tight_layout()
     pass
 
+def plot_sm_results(res, filter_output='predicted'):
+    fig = plt.figure(figsize=(14,8))
+    
+    endog_vars = res.data.ynames
+    states = mle_res.states.predicted.columns
+    
+    gs, plot_locs = gp.prepare_gridspec_figure(n_cols=3, n_plots=len(states))
+    
+    
+    for i, (name, loc) in enumerate(zip(states, plot_locs)):
+        axis = fig.add_subplot(gs[loc])
+
+        mu = getattr(res.states, filter_output)[name]
+        sigma = getattr(res.states, filter_output + '_cov').loc[name, name]
+
+        upper = mu + 1.98 * np.sqrt(sigma + 1e-8)
+        lower = mu - 1.98 * np.sqrt(sigma + 1e-8)
+
+        start_idx = 1 if filter_output == 'predicted' else 0
+        axis.plot(mle_res.data.dates, mu.values[start_idx:], label='Predicted')
+        axis.fill_between(mle_res.data.dates, lower.values[start_idx:], upper.values[start_idx:], color='tab:blue', alpha=0.25)
+
+        if name in endog_vars:
+            mle_res.data.orig_endog[name].plot(label='Data', ax=axis)
+
+        axis.set(title=name)
+    fig.tight_layout()
+    title_text = 'One-Step Ahead' if filter_output =='predicted' else filter_output.title()
+    fig.suptitle(f'Kalman {title_text} Predictions', y=1.05)
+    fig.axes[1].legend(bbox_to_anchor=(0.5, 0.98), loc='lower center', bbox_transform=fig.transFigure, ncols=2)
+
+    plt.show()
+
 
 def skipna(func): 
 
