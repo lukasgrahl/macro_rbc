@@ -6,6 +6,7 @@ from functools import wraps
 import statsmodels.api as sm
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.tsa.filters.hp_filter import hpfilter
+from scipy.signal import periodogram
 
 def time_format(arr: pd.Series,
                 t_format: str = "%Y-%m-%d"):
@@ -83,14 +84,15 @@ def plot_df(df: pd.DataFrame,
     fig.tight_layout()
     pass
 
-def plot_sm_results(res, filter_output='predicted'):
+def plot_sm_results(res, extra_data=None, filter_output='predicted', var_names=None):
     fig = plt.figure(figsize=(14,8))
     
     endog_vars = res.data.ynames
-    states = mle_res.states.predicted.columns
+    states = res.states.predicted.columns
+    if var_names:
+        states = [x for x in states if x in var_names]
     
     gs, plot_locs = gp.prepare_gridspec_figure(n_cols=3, n_plots=len(states))
-    
     
     for i, (name, loc) in enumerate(zip(states, plot_locs)):
         axis = fig.add_subplot(gs[loc])
@@ -107,6 +109,10 @@ def plot_sm_results(res, filter_output='predicted'):
 
         if name in endog_vars:
             res.data.orig_endog[name].plot(label='Data', ax=axis)
+        
+        elif extra_data is not None:
+            if name in extra_data.columns:
+                extra_data[name].plot(label='Data', ax=axis)
 
         axis.set(title=name)
     fig.tight_layout()
@@ -115,8 +121,9 @@ def plot_sm_results(res, filter_output='predicted'):
     fig.axes[1].legend(bbox_to_anchor=(0.5, 0.98), loc='lower center', bbox_transform=fig.transFigure, ncols=2)
 
     plt.show()
+    pass
 
-    
+
 def skipna(func): 
 
     @wraps(func)
@@ -191,3 +198,63 @@ def arr_adf(arr, maxlag: int=10, p_level: float=.05):
     test = adfuller(arr, maxlag=maxlag)
     print(arr.name, f" p-val: {test[1]},  reject: {test[1] <= p_level}")
     pass
+
+def get_max_seasonal(df: pd.DataFrame,
+                    lags: int = 15):
+    out = pd.DataFrame()
+    for col in df.columns:
+        freq, Pxx = periodogram(df[col].dropna(), window='triang', nfft=lags*2)
+        out[col] = Pxx
+        print(f'{col}: strongest effect at {np.where((Pxx == Pxx.max())==True)[0][0] + 1} lags')
+    return out
+
+class OLS_dummie_deseasonal:
+    
+    def __init__(self):
+        
+        self.y = None
+        self.model = None
+        self.m_res = None
+        pass
+    
+    def _summary(self):
+        print(self.m_res.summary())
+        pass
+    
+    def _get_quarter_dummiesX(self, arr):
+        X = pd.Series(arr.index)
+        X = X.apply(lambda x: np.ceil(x.month/3)).values
+        X = pd.get_dummies(X).iloc[:, :-1]
+        X.set_index(arr.index, inplace=True)
+        X.columns = [f'quarter_{item}' for item in X.columns]
+    
+        X['constant'] = list([1] * len(X))
+        X['trend'] = list(range(0, len(X)))
+        
+        return X
+    
+    def get_trend(self, 
+                  y,
+                  summary: bool=False):
+        self.y = y.copy()
+        
+        # for skipping na
+        self.detrend = y.copy()
+        arr = y.dropna().copy()
+        
+        self.model = sm.OLS(arr, exog=self._get_quarter_dummiesX(arr), hasconst=True)
+        self.m_res = self.model.fit()
+    
+        if summary:
+            self._summary()
+            
+        # for skipping na, get original shape back
+        self.detrend.loc[arr.index] = self.m_res.resid
+        
+        return self.detrend
+    
+    def predict(self,
+                y):
+        pred = self.m_res.predict(self._get_quarter_dummiesX(y))
+        return y - pred
+    
