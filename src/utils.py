@@ -65,8 +65,13 @@ def ADF_test_summary(df, maxlag=None, autolag='BIC', missing='error'):
 
 
 def plot_df(df: pd.DataFrame,
+            fill_arr: np.array=None,
             row_ratio: float =1.5,
-            figsize_col: int=10):
+            figsize_col: int=10,
+            if_skpina: bool = True):
+    start = df.index.min()
+    end = df.index.max()
+    
     
     row = int(np.ceil(df.shape[1]/2))
     fig, ax = plt.subplots(row, 2, figsize=(10, row_ratio * row))
@@ -78,11 +83,29 @@ def plot_df(df: pd.DataFrame,
             c=0
             r=i
 
-        ax[r, c].plot(df[col])
+        if fill_arr is not None:
+            # only inlcude relevant recessions
+            for t in fill_arr:
+                if t[1] < start:
+                    continue
+                if t[0] < start:
+                    t[0]=start
+                if t[0] > end:
+                    continue
+                if t[1] > end:
+                    t[1]=end
+                # plot recessions
+                ax[r, c].axvspan(t[0], t[1], alpha=.2, color='red')
+
+        # plot col                
+        ax[r, c].plot(df[col].dropna())
         ax[r, c].set_title(col)
 
+    fig.legend(['recession'])
     fig.tight_layout()
     pass
+
+
 
 def plot_sm_results(res, extra_data=None, filter_output='predicted', var_names=None):
     fig = plt.figure(figsize=(14,8))
@@ -178,16 +201,16 @@ def get_seasonal_decompose(arr: pd.Series, plot: bool=False, **kwargs):
 
 
 @skipna
-def get_seasonal_hp(arr: pd.Series, plot: bool=False, lamb:float = 6.25, return_cycle: bool = False, **kwargs):
+def get_seasonal_hp(arr: pd.Series, plot: bool=False, lamb:float = 6.25, return_trend: bool = False, **kwargs):
     """
-    returns: cycle, trend
+    returns: cylce or trend based on "return_trend"
     """
     cycle, trend = hpfilter(arr, lamb=lamb)
     plt.plot(np.array([cycle, trend]).transpose()) if plot is True else 0
-    if return_cycle:
-        return cycle
-    else:
+    if return_trend:
         return trend
+    else:
+        return cycle
 
 
 @skipna
@@ -217,7 +240,7 @@ class OLS_dummie_deseasonal:
         self.m_res = None
         pass
     
-    def _summary(self):
+    def summary(self):
         print(self.m_res.summary())
         pass
     
@@ -229,29 +252,33 @@ class OLS_dummie_deseasonal:
         X.columns = [f'quarter_{item}' for item in X.columns]
     
         X['constant'] = list([1] * len(X))
-        X['trend'] = list(range(0, len(X)))
-        
+        X['trend'] = np.linspace(0, len(X)-1, len(X))
+        X['trend^2'] = X.trend ** 2
+                
         return X
     
     def get_trend(self, 
-                  y,
-                  summary: bool=False):
+                  y):
         self.y = y.copy()
         
         # for skipping na
         self.detrend = y.copy()
-        arr = y.dropna().copy()
+        self._y_na = y.dropna().copy()
         
-        self.model = sm.OLS(arr, exog=self._get_quarter_dummiesX(arr), hasconst=True)
+        self.model = sm.OLS(self._y_na, exog=self._get_quarter_dummiesX(self._y_na), hasconst=True)
         self.m_res = self.model.fit()
     
-        if summary:
-            self._summary()
-            
         # for skipping na, get original shape back
-        self.detrend.loc[arr.index] = self.m_res.resid
-        
+        self.detrend.loc[self._y_na.index] = self.m_res.resid
         return self.detrend
+    
+    def plot_fit(self):
+        fig, ax = plt.subplots()
+        ax.plot(self._y_na, label='data')
+        ax.plot(self.detrend.dropna(), label='fit')
+        ax.set_title(self.y.name)
+        fig.legend()
+        pass
     
     def predict(self,
                 y):
